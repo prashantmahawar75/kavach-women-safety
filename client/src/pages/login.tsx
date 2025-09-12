@@ -293,7 +293,7 @@ export default function Login({ onAuthSuccess }: LoginProps) {
             )}
 
             <div className="text-center">
-              <p className="text-sm text-gray-600">Admin Login: prashant75 / prashant232323</p>
+              
             </div>
           </div>
         </CardContent>
