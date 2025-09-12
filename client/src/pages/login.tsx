@@ -291,10 +291,6 @@ export default function Login({ onAuthSuccess }: LoginProps) {
                 </Button>
               </form>
             )}
-
-            <div className="text-center">
-              
-            </div>
           </div>
         </CardContent>
       </Card>
