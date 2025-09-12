@@ -16,7 +16,7 @@ interface EmergencyModalProps {
 export default function EmergencyModal({ isOpen, onClose }: EmergencyModalProps) {
   const [countdown, setCountdown] = useState(3);
   const [isCountingDown, setIsCountingDown] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number, lng: number } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -66,25 +66,49 @@ export default function EmergencyModal({ isOpen, onClose }: EmergencyModalProps)
         description: "Please set up an emergency contact in your profile.",
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     const message = `🚨 EMERGENCY ALERT 🚨\n\nI need immediate help!\n\nMy current location:\nhttps://maps.google.com/maps?q=${latitude},${longitude}\n\nLat: ${latitude.toFixed(6)}\nLng: ${longitude.toFixed(6)}\n\nPlease contact emergency services and come to my location immediately!\n\n- Sent from Kavach Safety App`;
-    
+
+    // Try multiple methods to send SMS
     const smsUrl = `sms:${user.emergencyContact}?body=${encodeURIComponent(message)}`;
-    
+
     try {
-      window.open(smsUrl, '_blank');
+      // Method 1: Try creating a link and clicking it
+      const link = document.createElement('a');
+      link.href = smsUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       toast({
-        title: "SMS Sent",
-        description: `Emergency SMS sent to ${user.emergencyContact}`,
+        title: "📱 SMS App Opening",
+        description: `Opening SMS to ${user.emergencyContact}`,
       });
+
+      // Fallback: Also try window.location for better compatibility
+      setTimeout(() => {
+        try {
+          window.location.href = smsUrl;
+        } catch (fallbackError) {
+          console.log('SMS fallback method failed:', fallbackError);
+        }
+      }, 500);
+
+      return true;
     } catch (error) {
+      console.error('SMS error:', error);
+
+      // Show manual instructions
       toast({
-        title: "SMS Error",
-        description: "Failed to open SMS app. Please call manually.",
+        title: "📱 Manual SMS Required",
+        description: `Please manually text ${user.emergencyContact}: "EMERGENCY - I need help at location ${latitude.toFixed(4)}, ${longitude.toFixed(4)}"`,
         variant: "destructive",
       });
+
+      return false;
     }
   };
 
@@ -95,85 +119,131 @@ export default function EmergencyModal({ isOpen, onClose }: EmergencyModalProps)
         description: "Please set up an emergency contact in your profile.",
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     const telUrl = `tel:${user.emergencyContact}`;
-    
+
     try {
-      window.open(telUrl, '_self');
+      // Method 1: Try creating a link and clicking it
+      const link = document.createElement('a');
+      link.href = telUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       toast({
-        title: "Calling Emergency Contact",
-        description: `Calling ${user.emergencyContact}...`,
+        title: "📞 Calling Emergency Contact",
+        description: `Initiating call to ${user.emergencyContact}`,
       });
+
+      // Fallback: Also try window.location for better compatibility
+      setTimeout(() => {
+        try {
+          window.location.href = telUrl;
+        } catch (fallbackError) {
+          console.log('Call fallback method failed:', fallbackError);
+        }
+      }, 1000);
+
+      return true;
     } catch (error) {
+      console.error('Call error:', error);
+
+      // Show manual instructions
       toast({
-        title: "Call Error",
-        description: "Failed to initiate call. Please dial manually.",
+        title: "📞 Manual Call Required",
+        description: `Please manually call ${user.emergencyContact} immediately!`,
         variant: "destructive",
       });
+
+      return false;
     }
   };
 
   const triggerEmergency = () => {
+    console.log('🚨 Emergency triggered!');
+
+    const executeEmergencyActions = (lat: number, lng: number) => {
+      setCurrentLocation({ lat, lng });
+
+      console.log(`📍 Location: ${lat}, ${lng}`);
+
+      // Send SMS first
+      console.log('📱 Attempting to send SMS...');
+      const smsSuccess = sendSMSToEmergencyContact(lat, lng);
+
+      // Make phone call after a delay
+      setTimeout(() => {
+        console.log('📞 Attempting to make call...');
+        const callSuccess = callEmergencyContact();
+
+        // If both SMS and call failed, show emergency instructions
+        if (!smsSuccess && !callSuccess) {
+          toast({
+            title: "🚨 EMERGENCY - Manual Action Required",
+            description: `Call ${user?.emergencyContact || 'emergency services'} NOW! Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            variant: "destructive",
+          });
+        }
+      }, 3000); // Increased delay to 3 seconds
+
+      // Also send to backend
+      emergencyMutation.mutate({
+        latitude: lat,
+        longitude: lng,
+      });
+    };
+
     if (navigator.geolocation) {
+      console.log('🌍 Getting current location...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          setCurrentLocation({ lat, lng });
-          
-          // Send SMS first
-          sendSMSToEmergencyContact(lat, lng);
-          
-          // Make phone call after a short delay
-          setTimeout(() => {
-            callEmergencyContact();
-          }, 2000);
-          
-          // Also send to backend
-          emergencyMutation.mutate({
-            latitude: lat,
-            longitude: lng,
-          });
+          console.log('✅ Location acquired:', lat, lng);
+          executeEmergencyActions(lat, lng);
         },
-        () => {
+        (error) => {
+          console.log('❌ Geolocation failed:', error.message);
           // Use default location if geolocation fails
           const defaultLat = 28.6139;
           const defaultLng = 77.2090;
-          setCurrentLocation({ lat: defaultLat, lng: defaultLng });
-          
-          sendSMSToEmergencyContact(defaultLat, defaultLng);
-          setTimeout(() => {
-            callEmergencyContact();
-          }, 2000);
-          
-          emergencyMutation.mutate({
-            latitude: defaultLat,
-            longitude: defaultLng,
+          console.log('📍 Using default location:', defaultLat, defaultLng);
+
+          toast({
+            title: "Location unavailable",
+            description: "Using default location (Delhi). Please share your exact location manually.",
+            variant: "destructive",
           });
+
+          executeEmergencyActions(defaultLat, defaultLng);
+        },
+        {
+          timeout: 10000, // 10 second timeout
+          enableHighAccuracy: true,
+          maximumAge: 60000 // Accept cached location up to 1 minute old
         }
       );
     } else {
+      console.log('❌ Geolocation not supported');
       const defaultLat = 28.6139;
       const defaultLng = 77.2090;
-      setCurrentLocation({ lat: defaultLat, lng: defaultLng });
-      
-      sendSMSToEmergencyContact(defaultLat, defaultLng);
-      setTimeout(() => {
-        callEmergencyContact();
-      }, 2000);
-      
-      emergencyMutation.mutate({
-        latitude: defaultLat,
-        longitude: defaultLng,
+
+      toast({
+        title: "Geolocation not supported",
+        description: "Using default location. Please share your exact location manually.",
+        variant: "destructive",
       });
+
+      executeEmergencyActions(defaultLat, defaultLng);
     }
   };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    
+
     if (isCountingDown && countdown > 0) {
       timer = setTimeout(() => {
         setCountdown(countdown - 1);
@@ -203,9 +273,9 @@ export default function EmergencyModal({ isOpen, onClose }: EmergencyModalProps)
           <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="h-8 w-8 text-white" />
           </div>
-          
+
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Emergency Alert</h2>
-          
+
           {!isCountingDown ? (
             <>
               <p className="text-gray-600 mb-4">
@@ -225,22 +295,54 @@ export default function EmergencyModal({ isOpen, onClose }: EmergencyModalProps)
                   </p>
                 </div>
               )}
-              <div className="flex space-x-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleCancel}
-                  data-testid="button-cancel-emergency"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-red-600 hover:bg-red-700"
-                  onClick={startCountdown}
-                  data-testid="button-confirm-emergency"
-                >
-                  Activate Emergency
-                </Button>
+              <div className="space-y-3">
+                <div className="flex space-x-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleCancel}
+                    data-testid="button-cancel-emergency"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    onClick={startCountdown}
+                    data-testid="button-confirm-emergency"
+                  >
+                    Activate Emergency
+                  </Button>
+                </div>
+
+                {user?.emergencyContact && (
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        navigator.geolocation?.getCurrentPosition(
+                          (pos) => sendSMSToEmergencyContact(pos.coords.latitude, pos.coords.longitude),
+                          () => sendSMSToEmergencyContact(28.6139, 77.2090)
+                        );
+                      }}
+                      data-testid="button-manual-sms"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" />
+                      Send SMS
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={callEmergencyContact}
+                      data-testid="button-manual-call"
+                    >
+                      <Phone className="h-4 w-4 mr-1" />
+                      Call Now
+                    </Button>
+                  </div>
+                )}
               </div>
             </>
           ) : (
