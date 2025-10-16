@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://kavach-women-safety-m6f0.onrender.com/sitemap.xml
