@@ -1,3 +1,9 @@
+# Allow all search engines to crawl everything
 User-agent: *
 Allow: /
+
+# Sitemap location
 Sitemap: https://kavach-women-safety-m6f0.onrender.com/sitemap.xml
+
+# Optional: You can also add crawl delay if needed (e.g., 10 seconds)
+# Crawl-delay: 10
